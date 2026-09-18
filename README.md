@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SIKEP — Sistem Informasi Keuangan Pesantren
 
-## Getting Started
+> Kelola Keuangan Lebih Mudah, Transparan, dan Terintegrasi.
+> Sederhana untuk Bendahara. Transparan untuk Yayasan. Terkontrol untuk Pesantren.
 
-First, run the development server:
+SIKEP adalah aplikasi keuangan pesantren (bukan aplikasi sekolah pada
+umumnya) untuk mengelola pemasukan, pengeluaran, tagihan santri,
+pembayaran, anggaran, approval, dan pelaporan keuangan pesantren secara
+terpusat dan auditable.
+
+Status saat ini: **PHASE 1 — FOUNDATION**. Lihat [docs/decisions.md](docs/decisions.md)
+untuk daftar keputusan phase dan [docs/architecture.md](docs/architecture.md)
+untuk desain penuh.
+
+## Stack
+
+Next.js (App Router) · TypeScript (strict) · Tailwind CSS v4 · shadcn/ui ·
+PostgreSQL · Prisma · Zod · Vitest · Pino.
+
+## Menjalankan Secara Lokal
 
 ```bash
+npm install
+cp .env.example .env   # isi DATABASE_URL, dll.
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Aplikasi berjalan di [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Skrip
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Perintah              | Kegunaan                                    |
+| --------------------- | ------------------------------------------- |
+| `npm run dev`         | Jalankan dev server                         |
+| `npm run build`       | Build production                            |
+| `npm run start`       | Jalankan build production                   |
+| `npm run lint`        | ESLint                                      |
+| `npm run typecheck`   | Pengecekan tipe TypeScript (`tsc --noEmit`) |
+| `npm run format`      | Format kode dengan Prettier                 |
+| `npm run test`        | Jalankan seluruh unit test (Vitest)         |
+| `npm run test:watch`  | Unit test mode watch                        |
+| `npm run db:generate` | Generate Prisma Client                      |
+| `npm run db:migrate`  | Jalankan migrasi Prisma (dev)               |
+| `npm run db:studio`   | Buka Prisma Studio                          |
 
-## Learn More
+## Struktur Proyek
 
-To learn more about Next.js, take a look at the following resources:
+Lihat [docs/architecture.md](docs/architecture.md#struktur-proyek) untuk
+penjelasan lengkap tiap folder dan alasannya.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Dokumentasi
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [docs/architecture.md](docs/architecture.md) — arsitektur, layering, kontrak API, prinsip keuangan
+- [docs/development.md](docs/development.md) — panduan setup & alur kerja pengembangan
+- [docs/decisions.md](docs/decisions.md) — catatan keputusan teknis per phase
+- [docs/step1/00-progress.md](docs/step1/00-progress.md) — checklist penerimaan PHASE 1

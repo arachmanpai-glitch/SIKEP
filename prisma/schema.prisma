@@ -1,0 +1,14 @@
+// SIKEP - Prisma schema
+// PHASE 1 (FOUNDATION): datasource/generator wiring only.
+// Domain models (schools, users, santri, financial_ledger, ...) are added in
+// PHASE 2 (DATABASE) per docs/architecture.md and the SIKEP build spec.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Connection URL now lives in prisma.config.ts (Prisma ORM v7); this block
+// only declares the provider for the CLI/migrations.
+datasource db {
+  provider = "postgresql"
+}
