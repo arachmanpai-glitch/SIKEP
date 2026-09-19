@@ -33,8 +33,33 @@ export default async function Home() {
               Laporan
             </Link>
             {session.roleCode === "BENDAHARA" && (
+              <Link href="/pemasukan" className="text-sm underline">
+                Catat Pemasukan
+              </Link>
+            )}
+            {session.roleCode === "BENDAHARA" && (
+              <Link href="/pengeluaran" className="text-sm underline">
+                Catat Pengeluaran
+              </Link>
+            )}
+            {session.roleCode === "BENDAHARA" && (
+              <Link href="/tagihan" className="text-sm underline">
+                Tagihan Santri
+              </Link>
+            )}
+            {session.roleCode === "BENDAHARA" && (
+              <Link href="/pembayaran" className="text-sm underline">
+                Pembayaran Santri
+              </Link>
+            )}
+            {session.roleCode === "BENDAHARA" && (
               <Link href="/rekonsiliasi" className="text-sm underline">
                 Rekonsiliasi
+              </Link>
+            )}
+            {session.roleCode === "YAYASAN" && (
+              <Link href="/persetujuan" className="text-sm underline">
+                Persetujuan
               </Link>
             )}
             {(session.roleCode === "ADMIN" || session.roleCode === "YAYASAN") && (
