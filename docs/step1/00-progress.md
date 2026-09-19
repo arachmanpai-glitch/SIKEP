@@ -31,14 +31,14 @@ mulai `PHASE 2 — DATABASE`.
 
 ## Hasil Validasi
 
-| Perintah                | Hasil                              |
-| ------------------------ | ----------------------------------- |
-| `npm run lint`            | ✅ 0 error                          |
-| `npm run typecheck`       | ✅ 0 error                          |
-| `npm run test`            | ✅ 18/18 test lolos (4 file)       |
-| `npm run build`           | ✅ build production sukses         |
-| `npx prisma generate`     | ✅ Prisma Client ter-generate       |
-| Preview `npm run dev`     | ✅ halaman placeholder tampil benar, tanpa error console |
+| Perintah              | Hasil                                                    |
+| --------------------- | -------------------------------------------------------- |
+| `npm run lint`        | ✅ 0 error                                               |
+| `npm run typecheck`   | ✅ 0 error                                               |
+| `npm run test`        | ✅ 18/18 test lolos (4 file)                             |
+| `npm run build`       | ✅ build production sukses                               |
+| `npx prisma generate` | ✅ Prisma Client ter-generate                            |
+| Preview `npm run dev` | ✅ halaman placeholder tampil benar, tanpa error console |
 
 ## Catatan / Risiko Terbuka (lihat detail di `docs/decisions.md`)
 

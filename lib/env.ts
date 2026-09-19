@@ -10,7 +10,9 @@ const envSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   APP_TIMEZONE: z.string().default("Asia/Jakarta"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL wajib diisi"),
-  AUTH_SECRET: z.string().optional(),
+  /** HS256 JWT signing secret for session cookies (lib/auth/session.ts).
+   * Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))" */
+  AUTH_SECRET: z.string().min(32, "AUTH_SECRET wajib diisi, minimal 32 karakter"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 });
 

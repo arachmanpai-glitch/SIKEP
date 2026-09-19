@@ -1,14 +1,844 @@
 // SIKEP - Prisma schema
-// PHASE 1 (FOUNDATION): datasource/generator wiring only.
-// Domain models (schools, users, santri, financial_ledger, ...) are added in
-// PHASE 2 (DATABASE) per docs/architecture.md and the SIKEP build spec.
+// PHASE 2 (DATABASE): full domain schema.
+//
+// Conventions (see docs/architecture.md and docs/decisions.md D11-D16):
+// - Primary keys: UUID (`@default(uuid()) @db.Uuid`).
+// - Money: `Decimal @db.Decimal(18, 2)` — NEVER Float.
+// - Timestamps: `@db.Timestamptz(6)` (timezone-aware; app-level display
+//   timezone is Asia/Jakarta, see constants/app.ts).
+// - Multi-tenant: every domain table carries `schoolId`, always scoped from
+//   `authenticated_user.school_id` server-side (PHASE 3), never from client
+//   input.
+// - `financial_ledger`, `audit_logs`, and `reversal_transactions` are
+//   INSERT-ONLY. No `updatedAt`/`deletedAt` — corrections are new rows
+//   (reversals), never UPDATE/DELETE, per the transaction-immutability rule.
+// - `santri_bills.amountPaid` and any similar running totals are caches
+//   maintained exclusively by the service layer inside a DB transaction;
+//   the authoritative source of truth stays the child rows
+//   (`payment_allocations`, `financial_ledger`). Never trust/expose them as
+//   directly user-editable.
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Connection URL now lives in prisma.config.ts (Prisma ORM v7); this block
-// only declares the provider for the CLI/migrations.
+// Connection URL lives in prisma.config.ts (Prisma ORM v7); this block only
+// declares the provider for the CLI/migrations.
 datasource db {
   provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+/// Fixed set per SIKEP spec section 4 ("struktur resmi") — unlike bill types
+/// (section 5, explicitly configurable), class levels are a stated official
+/// structure, so this is an enum rather than a freely user-editable table.
+enum ClassLevel {
+  K1
+  K2
+  K3
+  K4
+  K5
+  K6
+  PENGABDIAN
+}
+
+enum SantriStatus {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+  WITHDRAWN
+}
+
+enum FinancialAccountType {
+  CASH
+  BANK
+}
+
+enum TransactionCategoryType {
+  INCOME
+  EXPENSE
+}
+
+/// Shared status flow for income/expense transactions, per spec section 11:
+/// DRAFT -> SUBMITTED -> PENDING_APPROVAL -> APPROVED -> POSTED
+/// PENDING_APPROVAL -> REJECTED -> (back to) DRAFT
+/// POSTED -> VOIDED (paired with a reversal_transactions row)
+enum TransactionStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  POSTED
+  VOIDED
+}
+
+enum BillStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  VOIDED
+}
+
+/// santri_credits is an append-only ledger of credit movements (mirrors the
+/// financial_ledger philosophy) rather than one mutable balance column —
+/// current available credit = SUM(amount) where amount is signed
+/// (+issued / -consumed / -voided-reversal).
+enum SantriCreditType {
+  ISSUED
+  CONSUMED
+  VOIDED_REVERSAL
+}
+
+enum LedgerEntryType {
+  INCOME
+  EXPENSE
+  REVERSAL
+  OPENING_BALANCE
+}
+
+/// Polymorphic pointer target for financial_ledger.referenceType /
+/// approval_requests.entityType / transaction_attachments.entityType /
+/// reversal_transactions.originalEntityType.
+enum FinancialEntityType {
+  INCOME_TRANSACTION
+  EXPENSE_TRANSACTION
+  SANTRI_PAYMENT
+  OPENING_BALANCE
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FinancialPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+/// Per spec section 16 — exact list, do not extend without a spec change.
+enum AuditAction {
+  CREATE
+  UPDATE
+  SUBMIT
+  APPROVE
+  REJECT
+  POST
+  VOID
+  REVERSAL
+  LOGIN
+  LOGOUT
+  EXPORT
+  CONFIG_CHANGE
+}
+
+// =============================================================================
+// IDENTITY & TENANCY
+// =============================================================================
+
+model School {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users                  User[]
+  academicYears          AcademicYear[]
+  classes                Class[]
+  santri                 Santri[]
+  financialAccounts      FinancialAccount[]
+  fundSources            FundSource[]
+  transactionCategories  TransactionCategory[]
+  billTypes              BillType[]
+  santriBills            SantriBill[]
+  santriPayments         SantriPayment[]
+  paymentAllocations     PaymentAllocation[]
+  santriCredits          SantriCredit[]
+  incomeTransactions     IncomeTransaction[]
+  expenseTransactions    ExpenseTransaction[]
+  financialLedgerEntries FinancialLedger[]
+  approvalRequests       ApprovalRequest[]
+  approvalSettings       ApprovalSettings?
+  budgets                Budget[]
+  transactionAttachments TransactionAttachment[]
+  auditLogs              AuditLog[]
+  notifications          Notification[]
+  settings               Setting[]
+  financialPeriods       FinancialPeriod[]
+  reversalTransactions   ReversalTransaction[]
+
+  @@map("schools")
+}
+
+/// Global reference data — exactly 3 rows (ADMIN, BENDAHARA, YAYASAN),
+/// seeded in PHASE 4. Deliberately NOT tenant-scoped: role set is fixed by
+/// spec section 3, not per-school configurable. `code` is what application
+/// code checks against (see docs/decisions.md D12).
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  schoolId     String    @map("school_id") @db.Uuid
+  roleId       String    @map("role_id") @db.Uuid
+  fullName     String    @map("full_name")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  school School @relation(fields: [schoolId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  createdIncomeTransactions  IncomeTransaction[]     @relation("IncomeCreatedBy")
+  postedIncomeTransactions   IncomeTransaction[]     @relation("IncomePostedBy")
+  createdExpenseTransactions ExpenseTransaction[]    @relation("ExpenseCreatedBy")
+  postedExpenseTransactions  ExpenseTransaction[]    @relation("ExpensePostedBy")
+  requestedApprovals         ApprovalRequest[]       @relation("ApprovalRequestedBy")
+  decidedApprovals           ApprovalRequest[]       @relation("ApprovalDecidedBy")
+  uploadedAttachments        TransactionAttachment[] @relation("AttachmentUploadedBy")
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  reversedTransactions       ReversalTransaction[]   @relation("ReversalReversedBy")
+  closedFinancialPeriods     FinancialPeriod[]       @relation("FinancialPeriodClosedBy")
+  updatedApprovalSettings    ApprovalSettings[]      @relation("ApprovalSettingsUpdatedBy")
+  updatedSettings            Setting[]               @relation("SettingUpdatedBy")
+
+  @@index([schoolId])
+  @@map("users")
+}
+
+// =============================================================================
+// ACADEMIC STRUCTURE
+// =============================================================================
+
+model AcademicYear {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String
+  startDate DateTime @map("start_date") @db.Timestamptz(6)
+  endDate   DateTime @map("end_date") @db.Timestamptz(6)
+  isActive  Boolean  @default(false) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school           School            @relation(fields: [schoolId], references: [id])
+  classes          Class[]
+  santriBills      SantriBill[]
+  budgets          Budget[]
+  financialPeriods FinancialPeriod[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("academic_years")
+}
+
+model Class {
+  id             String     @id @default(uuid()) @db.Uuid
+  schoolId       String     @map("school_id") @db.Uuid
+  academicYearId String     @map("academic_year_id") @db.Uuid
+  level          ClassLevel
+  name           String
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  school       School       @relation(fields: [schoolId], references: [id])
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  santri       Santri[]
+
+  @@index([schoolId, academicYearId, level])
+  @@map("classes")
+}
+
+// =============================================================================
+// SANTRI
+// =============================================================================
+
+model Santri {
+  id         String       @id @default(uuid()) @db.Uuid
+  schoolId   String       @map("school_id") @db.Uuid
+  classId    String?      @map("class_id") @db.Uuid
+  nis        String
+  fullName   String       @map("full_name")
+  status     SantriStatus @default(ACTIVE)
+  enrolledAt DateTime?    @map("enrolled_at") @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt  DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  school School @relation(fields: [schoolId], references: [id])
+  class  Class? @relation(fields: [classId], references: [id])
+
+  bills    SantriBill[]
+  payments SantriPayment[]
+  credits  SantriCredit[]
+
+  @@unique([schoolId, nis])
+  @@index([schoolId, classId])
+  @@index([schoolId, status])
+  @@map("santri")
+}
+
+// =============================================================================
+// FINANCIAL MASTER DATA (configurable — PHASE 4 seeds these, not hard-coded)
+// =============================================================================
+
+model FinancialAccount {
+  id             String               @id @default(uuid()) @db.Uuid
+  schoolId       String               @map("school_id") @db.Uuid
+  name           String
+  type           FinancialAccountType
+  /// One-time initial setup balance ONLY (e.g. when the school first starts
+  /// using SIKEP). NOT a live/running balance — the live balance is always
+  /// computed from financial_ledger (opening_balance entry + posted
+  /// entries). Never exposed as a directly user-editable "current balance".
+  openingBalance Decimal              @default(0) @map("opening_balance") @db.Decimal(18, 2)
+  accountNumber  String?              @map("account_number")
+  isActive       Boolean              @default(true) @map("is_active")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?            @map("deleted_at") @db.Timestamptz(6)
+
+  school                 School               @relation(fields: [schoolId], references: [id])
+  incomeTransactions     IncomeTransaction[]
+  expenseTransactions    ExpenseTransaction[]
+  santriPayments         SantriPayment[]
+  financialLedgerEntries FinancialLedger[]
+
+  @@index([schoolId])
+  @@map("financial_accounts")
+}
+
+model FundSource {
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @map("school_id") @db.Uuid
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  school             School              @relation(fields: [schoolId], references: [id])
+  incomeTransactions IncomeTransaction[]
+
+  @@index([schoolId])
+  @@map("fund_sources")
+}
+
+model TransactionCategory {
+  id               String                  @id @default(uuid()) @db.Uuid
+  schoolId         String                  @map("school_id") @db.Uuid
+  name             String
+  type             TransactionCategoryType
+  /// Approval required if amount >= approval_settings threshold OR this
+  /// flag is true, per spec section 11.
+  requiresApproval Boolean                 @default(false) @map("requires_approval")
+  isActive         Boolean                 @default(true) @map("is_active")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?               @map("deleted_at") @db.Timestamptz(6)
+
+  school              School               @relation(fields: [schoolId], references: [id])
+  incomeTransactions  IncomeTransaction[]
+  expenseTransactions ExpenseTransaction[]
+  budgets             Budget[]
+
+  @@index([schoolId, type])
+  @@map("transaction_categories")
+}
+
+/// Configurable jenis tagihan (spec section 5). Seed list (Syahriyah, PSB,
+/// dst) is PHASE 4 data, not created here.
+model BillType {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @map("school_id") @db.Uuid
+  name      String
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  school      School       @relation(fields: [schoolId], references: [id])
+  santriBills SantriBill[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("bill_types")
+}
+
+// =============================================================================
+// BILLING & PAYMENTS
+// =============================================================================
+
+model SantriBill {
+  id             String     @id @default(uuid()) @db.Uuid
+  schoolId       String     @map("school_id") @db.Uuid
+  santriId       String     @map("santri_id") @db.Uuid
+  billTypeId     String     @map("bill_type_id") @db.Uuid
+  academicYearId String     @map("academic_year_id") @db.Uuid
+  amount         Decimal    @db.Decimal(18, 2)
+  /// Maintained by PaymentService inside a DB transaction whenever a
+  /// payment_allocations row is posted against this bill. Cache of
+  /// SUM(payment_allocations.amount) for this bill — not independently
+  /// editable, not the source of truth.
+  amountPaid     Decimal    @default(0) @map("amount_paid") @db.Decimal(18, 2)
+  status         BillStatus @default(UNPAID)
+  dueDate        DateTime?  @map("due_date") @db.Timestamptz(6)
+  description    String?
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  school       School              @relation(fields: [schoolId], references: [id])
+  santri       Santri              @relation(fields: [santriId], references: [id])
+  billType     BillType            @relation(fields: [billTypeId], references: [id])
+  academicYear AcademicYear        @relation(fields: [academicYearId], references: [id])
+  allocations  PaymentAllocation[]
+
+  @@index([schoolId, santriId, status])
+  @@index([schoolId, academicYearId])
+  @@map("santri_bills")
+}
+
+model SantriPayment {
+  id                  String            @id @default(uuid()) @db.Uuid
+  schoolId            String            @map("school_id") @db.Uuid
+  santriId            String            @map("santri_id") @db.Uuid
+  financialAccountId  String            @map("financial_account_id") @db.Uuid
+  /// Set by PaymentService once the corresponding ledger-posting income
+  /// transaction exists (PHASE 5) — links this payment to the
+  /// financial_ledger via income_transactions.
+  incomeTransactionId String?           @unique @map("income_transaction_id") @db.Uuid
+  amount              Decimal           @db.Decimal(18, 2)
+  paymentDate         DateTime          @default(now()) @map("payment_date") @db.Timestamptz(6)
+  referenceNo         String?           @map("reference_no")
+  note                String?
+  status              TransactionStatus @default(POSTED)
+  voidedAt            DateTime?         @map("voided_at") @db.Timestamptz(6)
+  voidReason          String?           @map("void_reason")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school            School                  @relation(fields: [schoolId], references: [id])
+  santri            Santri                  @relation(fields: [santriId], references: [id])
+  financialAccount  FinancialAccount        @relation(fields: [financialAccountId], references: [id])
+  incomeTransaction IncomeTransaction?      @relation(fields: [incomeTransactionId], references: [id])
+  allocations       PaymentAllocation[]
+  issuedCredits     SantriCredit[]          @relation("CreditSourcePayment")
+  attachments       TransactionAttachment[]
+
+  @@index([schoolId, santriId])
+  @@map("santri_payments")
+}
+
+model PaymentAllocation {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  santriPaymentId String   @map("santri_payment_id") @db.Uuid
+  santriBillId    String   @map("santri_bill_id") @db.Uuid
+  amount          Decimal  @db.Decimal(18, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school        School        @relation(fields: [schoolId], references: [id])
+  santriPayment SantriPayment @relation(fields: [santriPaymentId], references: [id])
+  santriBill    SantriBill    @relation(fields: [santriBillId], references: [id])
+
+  @@unique([santriPaymentId, santriBillId])
+  @@index([schoolId])
+  @@map("payment_allocations")
+}
+
+/// Append-only ledger of santri credit balance movements (overpayment),
+/// mirroring financial_ledger's philosophy. Current available credit for a
+/// santri = SUM(amount) across their rows (positive = issued, negative =
+/// consumed/voided). See spec section 12 (overpayment / credit balance).
+model SantriCredit {
+  id                String           @id @default(uuid()) @db.Uuid
+  schoolId          String           @map("school_id") @db.Uuid
+  santriId          String           @map("santri_id") @db.Uuid
+  type              SantriCreditType
+  /// Signed: positive for ISSUED, negative for CONSUMED/VOIDED_REVERSAL.
+  amount            Decimal          @db.Decimal(18, 2)
+  sourcePaymentId   String?          @map("source_payment_id") @db.Uuid
+  consumedForBillId String?          @map("consumed_for_bill_id") @db.Uuid
+  note              String?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school        School         @relation(fields: [schoolId], references: [id])
+  santri        Santri         @relation(fields: [santriId], references: [id])
+  sourcePayment SantriPayment? @relation("CreditSourcePayment", fields: [sourcePaymentId], references: [id])
+
+  @@index([schoolId, santriId])
+  @@map("santri_credits")
+}
+
+// =============================================================================
+// FINANCIAL TRANSACTIONS & LEDGER
+// =============================================================================
+
+model IncomeTransaction {
+  id                 String            @id @default(uuid()) @db.Uuid
+  schoolId           String            @map("school_id") @db.Uuid
+  financialAccountId String            @map("financial_account_id") @db.Uuid
+  fundSourceId       String            @map("fund_source_id") @db.Uuid
+  categoryId         String            @map("category_id") @db.Uuid
+  amount             Decimal           @db.Decimal(18, 2)
+  transactionDate    DateTime          @map("transaction_date") @db.Timestamptz(6)
+  description        String?
+  status             TransactionStatus @default(DRAFT)
+  postedAt           DateTime?         @map("posted_at") @db.Timestamptz(6)
+  voidedAt           DateTime?         @map("voided_at") @db.Timestamptz(6)
+  voidReason         String?           @map("void_reason")
+  createdById        String            @map("created_by_id") @db.Uuid
+  postedById         String?           @map("posted_by_id") @db.Uuid
+  /// Prevents double-processing the same client-initiated mutation, per
+  /// spec section 17 (Idempotency-Key header). Nullable: not every
+  /// programmatic insert requires one, but client-facing API mutations do.
+  idempotencyKey     String?           @unique @map("idempotency_key")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school           School                  @relation(fields: [schoolId], references: [id])
+  financialAccount FinancialAccount        @relation(fields: [financialAccountId], references: [id])
+  fundSource       FundSource              @relation(fields: [fundSourceId], references: [id])
+  category         TransactionCategory     @relation(fields: [categoryId], references: [id])
+  createdBy        User                    @relation("IncomeCreatedBy", fields: [createdById], references: [id])
+  postedBy         User?                   @relation("IncomePostedBy", fields: [postedById], references: [id])
+  santriPayment    SantriPayment?
+  ledgerEntries    FinancialLedger[]
+  attachments      TransactionAttachment[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, transactionDate])
+  @@map("income_transactions")
+}
+
+model ExpenseTransaction {
+  id                        String            @id @default(uuid()) @db.Uuid
+  schoolId                  String            @map("school_id") @db.Uuid
+  financialAccountId        String            @map("financial_account_id") @db.Uuid
+  categoryId                String            @map("category_id") @db.Uuid
+  amount                    Decimal           @db.Decimal(18, 2)
+  transactionDate           DateTime          @map("transaction_date") @db.Timestamptz(6)
+  description               String?
+  status                    TransactionStatus @default(DRAFT)
+  /// Snapshot of whether approval was required AND the threshold in force
+  /// at submission time — threshold is configurable and may change later,
+  /// this preserves an accurate audit trail of why a decision was made.
+  requiresApproval          Boolean           @default(false) @map("requires_approval")
+  approvalThresholdSnapshot Decimal?          @map("approval_threshold_snapshot") @db.Decimal(18, 2)
+  postedAt                  DateTime?         @map("posted_at") @db.Timestamptz(6)
+  voidedAt                  DateTime?         @map("voided_at") @db.Timestamptz(6)
+  voidReason                String?           @map("void_reason")
+  createdById               String            @map("created_by_id") @db.Uuid
+  postedById                String?           @map("posted_by_id") @db.Uuid
+  idempotencyKey            String?           @unique @map("idempotency_key")
+  createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school           School                  @relation(fields: [schoolId], references: [id])
+  financialAccount FinancialAccount        @relation(fields: [financialAccountId], references: [id])
+  category         TransactionCategory     @relation(fields: [categoryId], references: [id])
+  createdBy        User                    @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  postedBy         User?                   @relation("ExpensePostedBy", fields: [postedById], references: [id])
+  approvalRequests ApprovalRequest[]
+  ledgerEntries    FinancialLedger[]
+  attachments      TransactionAttachment[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, transactionDate])
+  @@map("expense_transactions")
+}
+
+/// Append-only source of truth for account balances (spec section 8).
+/// ENDING BALANCE = OPENING BALANCE + POSTED INCOME - POSTED EXPENSE +
+/// REVERSAL EFFECT, computed by SUMing this table's signed `amount` per
+/// financial_account. No updatedAt/deletedAt: rows are never mutated —
+/// corrections are new REVERSAL rows. Only PHASE 5's LedgerService writes
+/// here, always inside a DB transaction alongside the source record.
+///
+/// `referenceType`/`referenceId` are a soft, query-friendly pointer (not a
+/// DB-enforced FK — see TransactionAttachment for why a single polymorphic
+/// column can't carry a real FK into multiple tables); the real relations
+/// are the explicit `incomeTransactionId`/`expenseTransactionId` columns
+/// below. For an OPENING_BALANCE entry there is no separate source row, so
+/// `referenceId` is set to `financialAccountId` itself.
+model FinancialLedger {
+  id                   String              @id @default(uuid()) @db.Uuid
+  schoolId             String              @map("school_id") @db.Uuid
+  financialAccountId   String              @map("financial_account_id") @db.Uuid
+  financialPeriodId    String?             @map("financial_period_id") @db.Uuid
+  entryType            LedgerEntryType     @map("entry_type")
+  /// Signed: positive increases the account balance, negative decreases it.
+  amount               Decimal             @db.Decimal(18, 2)
+  referenceType        FinancialEntityType @map("reference_type")
+  referenceId          String              @map("reference_id") @db.Uuid
+  incomeTransactionId  String?             @map("income_transaction_id") @db.Uuid
+  expenseTransactionId String?             @map("expense_transaction_id") @db.Uuid
+  description          String?
+  postedAt             DateTime            @default(now()) @map("posted_at") @db.Timestamptz(6)
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school              School               @relation(fields: [schoolId], references: [id])
+  financialAccount    FinancialAccount     @relation(fields: [financialAccountId], references: [id])
+  financialPeriod     FinancialPeriod?     @relation(fields: [financialPeriodId], references: [id])
+  incomeTransaction   IncomeTransaction?   @relation(fields: [incomeTransactionId], references: [id])
+  expenseTransaction  ExpenseTransaction?  @relation(fields: [expenseTransactionId], references: [id])
+  reversalTransaction ReversalTransaction?
+
+  @@index([schoolId, financialAccountId])
+  @@index([schoolId, referenceType, referenceId])
+  @@map("financial_ledger")
+}
+
+// =============================================================================
+// APPROVAL
+// =============================================================================
+
+/// Only expense_transactions are approvable in PHASE 1-7 scope (spec section
+/// 11 details expense approval only). `entityType` stays an enum of the
+/// broader FinancialEntityType set so the shape survives if a future phase
+/// (explicitly requested, see spec section 19) extends approval elsewhere.
+model ApprovalRequest {
+  id                      String                @id @default(uuid()) @db.Uuid
+  schoolId                String                @map("school_id") @db.Uuid
+  expenseTransactionId    String                @map("expense_transaction_id") @db.Uuid
+  status                  ApprovalRequestStatus @default(PENDING)
+  requestedById           String                @map("requested_by_id") @db.Uuid
+  decidedById             String?               @map("decided_by_id") @db.Uuid
+  decidedAt               DateTime?             @map("decided_at") @db.Timestamptz(6)
+  /// Required when status = REJECTED (spec: "Rejection wajib memiliki
+  /// alasan"). Enforced at the service layer with Zod, not a DB CHECK, so
+  /// the constraint reads clearly next to the rest of the approval
+  /// workflow logic (see docs/decisions.md D15 for the trade-off).
+  reason                  String?
+  thresholdAmountSnapshot Decimal?              @map("threshold_amount_snapshot") @db.Decimal(18, 2)
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school             School             @relation(fields: [schoolId], references: [id])
+  expenseTransaction ExpenseTransaction @relation(fields: [expenseTransactionId], references: [id])
+  requestedBy        User               @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  decidedBy          User?              @relation("ApprovalDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([schoolId, status])
+  @@index([schoolId, expenseTransactionId])
+  @@map("approval_requests")
+}
+
+/// One row per school. Threshold default Rp1.000.000 per spec section 11,
+/// configurable. `allowNegativeBalance` backs the concurrency/integrity
+/// test scenario in spec section 18.
+model ApprovalSettings {
+  id                       String   @id @default(uuid()) @db.Uuid
+  schoolId                 String   @unique @map("school_id") @db.Uuid
+  expenseApprovalThreshold Decimal  @default(1000000.00) @map("expense_approval_threshold") @db.Decimal(18, 2)
+  allowNegativeBalance     Boolean  @default(false) @map("allow_negative_balance")
+  updatedById              String?  @map("updated_by_id") @db.Uuid
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school    School @relation(fields: [schoolId], references: [id])
+  updatedBy User?  @relation("ApprovalSettingsUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("approval_settings")
+}
+
+// =============================================================================
+// BUDGET
+// =============================================================================
+
+model Budget {
+  id             String    @id @default(uuid()) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  academicYearId String    @map("academic_year_id") @db.Uuid
+  categoryId     String    @map("category_id") @db.Uuid
+  plannedAmount  Decimal   @map("planned_amount") @db.Decimal(18, 2)
+  description    String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  school       School              @relation(fields: [schoolId], references: [id])
+  academicYear AcademicYear        @relation(fields: [academicYearId], references: [id])
+  category     TransactionCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([schoolId, academicYearId, categoryId])
+  @@index([schoolId])
+  @@map("budgets")
+}
+
+// =============================================================================
+// ATTACHMENTS
+// =============================================================================
+
+/// Bukti transaksi. `storageKey` is a private object-storage key (never a
+/// public URL) — the API always serves attachments via short-lived signed
+/// URLs generated on demand (PHASE 6/9/10), per spec's storage security
+/// requirements. Immutable once uploaded: replacing evidence creates a new
+/// row rather than mutating this one.
+model TransactionAttachment {
+  id                   String              @id @default(uuid()) @db.Uuid
+  schoolId             String              @map("school_id") @db.Uuid
+  /// Soft, query-friendly pointer only — NOT a DB-enforced FK. A single
+  /// column cannot carry a real foreign key into three different tables at
+  /// once (income/expense transactions, santri payments), so referential
+  /// integrity is enforced through the three typed nullable columns below
+  /// instead. Exactly one of them must be set, matching `entityType`
+  /// (enforced at the service layer with Zod, mirrored in tests).
+  entityType           FinancialEntityType @map("entity_type")
+  entityId             String              @map("entity_id") @db.Uuid
+  incomeTransactionId  String?             @map("income_transaction_id") @db.Uuid
+  expenseTransactionId String?             @map("expense_transaction_id") @db.Uuid
+  santriPaymentId      String?             @map("santri_payment_id") @db.Uuid
+  storageKey           String              @map("storage_key")
+  fileName             String              @map("file_name")
+  mimeType             String              @map("mime_type")
+  fileSizeBytes        Int                 @map("file_size_bytes")
+  uploadedById         String              @map("uploaded_by_id") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school             School              @relation(fields: [schoolId], references: [id])
+  uploadedBy         User                @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+  incomeTransaction  IncomeTransaction?  @relation(fields: [incomeTransactionId], references: [id])
+  expenseTransaction ExpenseTransaction? @relation(fields: [expenseTransactionId], references: [id])
+  santriPayment      SantriPayment?      @relation(fields: [santriPaymentId], references: [id])
+
+  @@index([schoolId, entityType, entityId])
+  @@map("transaction_attachments")
+}
+
+// =============================================================================
+// AUDIT & NOTIFICATIONS
+// =============================================================================
+
+/// Immutable (spec section 16: "Audit log immutable") — no updatedAt/
+/// deletedAt, INSERT-only, written by every service-layer mutation for the
+/// listed actions.
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  schoolId   String      @map("school_id") @db.Uuid
+  userId     String?     @map("user_id") @db.Uuid
+  action     AuditAction
+  entityType String      @map("entity_type")
+  entityId   String?     @map("entity_id") @db.Uuid
+  oldValues  Json?       @map("old_values")
+  newValues  Json?       @map("new_values")
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school School @relation(fields: [schoolId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([schoolId, entityType, entityId])
+  @@index([schoolId, action])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @map("school_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  message   String
+  isRead    Boolean   @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school School @relation(fields: [schoolId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([schoolId, userId, isRead])
+  @@map("notifications")
+}
+
+// =============================================================================
+// SETTINGS & PERIODS
+// =============================================================================
+
+model Setting {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  key         String
+  value       Json
+  description String?
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school    School @relation(fields: [schoolId], references: [id])
+  updatedBy User?  @relation("SettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([schoolId, key])
+  @@map("settings")
+}
+
+model FinancialPeriod {
+  id             String                @id @default(uuid()) @db.Uuid
+  schoolId       String                @map("school_id") @db.Uuid
+  academicYearId String?               @map("academic_year_id") @db.Uuid
+  name           String
+  startDate      DateTime              @map("start_date") @db.Timestamptz(6)
+  endDate        DateTime              @map("end_date") @db.Timestamptz(6)
+  status         FinancialPeriodStatus @default(OPEN)
+  closedAt       DateTime?             @map("closed_at") @db.Timestamptz(6)
+  closedById     String?               @map("closed_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school        School            @relation(fields: [schoolId], references: [id])
+  academicYear  AcademicYear?     @relation(fields: [academicYearId], references: [id])
+  closedBy      User?             @relation("FinancialPeriodClosedBy", fields: [closedById], references: [id])
+  ledgerEntries FinancialLedger[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, status])
+  @@map("financial_periods")
+}
+
+/// Formal record of a POSTED -> VOIDED -> REVERSAL correction (spec section
+/// 10). Complements `voidedAt`/`voidReason` on the transaction itself: this
+/// row is the audit-linked, ledger-linked record of who reversed it, why,
+/// and which financial_ledger entry the reversal produced.
+model ReversalTransaction {
+  id                 String              @id @default(uuid()) @db.Uuid
+  schoolId           String              @map("school_id") @db.Uuid
+  originalEntityType FinancialEntityType @map("original_entity_type")
+  originalEntityId   String              @map("original_entity_id") @db.Uuid
+  reason             String
+  reversedById       String              @map("reversed_by_id") @db.Uuid
+  ledgerEntryId      String?             @unique @map("ledger_entry_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  school      School           @relation(fields: [schoolId], references: [id])
+  reversedBy  User             @relation("ReversalReversedBy", fields: [reversedById], references: [id])
+  ledgerEntry FinancialLedger? @relation(fields: [ledgerEntryId], references: [id])
+
+  @@index([schoolId, originalEntityType, originalEntityId])
+  @@map("reversal_transactions")
 }
