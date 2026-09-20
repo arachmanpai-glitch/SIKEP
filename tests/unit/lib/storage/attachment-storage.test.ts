@@ -33,8 +33,12 @@ describe("lib/storage/attachment-storage generateAttachmentStorageKey", () => {
 
 describe("lib/storage/attachment-storage write/read", () => {
   beforeEach(() => {
-    vi.mocked(mkdir).mockReset().mockResolvedValue(undefined as never);
-    vi.mocked(writeFile).mockReset().mockResolvedValue(undefined as never);
+    vi.mocked(mkdir)
+      .mockReset()
+      .mockResolvedValue(undefined as never);
+    vi.mocked(writeFile)
+      .mockReset()
+      .mockResolvedValue(undefined as never);
     vi.mocked(readFile)
       .mockReset()
       .mockResolvedValue(Buffer.from("evidence-bytes") as never);

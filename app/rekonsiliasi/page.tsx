@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 import type {
@@ -260,9 +261,12 @@ export default function RekonsiliasiPage() {
         <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
           Rekonsiliasi & Periode Keuangan
         </h1>
-        <Link href="/dashboard" className="text-sm underline">
-          Dashboard
-        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/dashboard" className="underline">
+            Dashboard
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Menutup periode mengunci semua tanggal di dalamnya — pemasukan/pengeluaran baru dengan

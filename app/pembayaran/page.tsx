@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, type FormEvent, useEffect, useState } from "react";
 
 import { AttachmentPanel } from "@/components/attachments/AttachmentPanel";
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
@@ -135,7 +136,9 @@ export default function PembayaranPage() {
   }, [santriId]);
 
   function toggleBill(id: string) {
-    setSelectedBillIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelectedBillIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
   function nameOf(list: OptionDto[], id: string): string {
@@ -162,7 +165,7 @@ export default function PembayaranPage() {
       setSuccessMessage(
         selectedBillIds.length > 0
           ? "Pembayaran berhasil dicatat dan dialokasikan ke tagihan yang dipilih (kelebihan otomatis jadi kredit)."
-          : "Pembayaran berhasil dicatat sebagai deposit/kredit (tidak dialokasikan ke tagihan manapun)."
+          : "Pembayaran berhasil dicatat sebagai deposit/kredit (tidak dialokasikan ke tagihan manapun).",
       );
       setForm((f) => ({ ...emptyForm, paymentDate: f.paymentDate }));
       await loadSantriDetail(santriId);
@@ -198,6 +201,7 @@ export default function PembayaranPage() {
           <Link href="/dashboard" className="underline">
             Dashboard
           </Link>
+          <LogoutButton />
         </div>
       </div>
 
@@ -337,7 +341,10 @@ export default function PembayaranPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="amount" className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+              <label
+                htmlFor="amount"
+                className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300"
+              >
                 Jumlah (Rp) *
               </label>
               <input

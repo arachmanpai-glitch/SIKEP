@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet } from "@/lib/client/api";
 import { LOCALE } from "@/constants/app";
 import { AUDIT_ACTIONS } from "@/lib/validation/audit";
@@ -79,9 +80,12 @@ export default function AuditPage() {
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Audit Log</h1>
-        <Link href="/dashboard" className="text-sm underline">
-          Dashboard
-        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/dashboard" className="underline">
+            Dashboard
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Catatan immutable setiap aksi kritikal (spec section 16) — hanya untuk Admin dan Yayasan.

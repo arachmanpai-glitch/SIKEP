@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { listAttachmentsQuerySchema, uploadAttachmentMetaSchema } from "@/lib/validation/attachment";
+import {
+  listAttachmentsQuerySchema,
+  uploadAttachmentMetaSchema,
+} from "@/lib/validation/attachment";
 
 const entityId = "11111111-1111-4111-8111-111111111111";
 

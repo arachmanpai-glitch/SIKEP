@@ -13,7 +13,10 @@ import {
   readAttachmentFile,
   writeAttachmentFile,
 } from "@/lib/storage/attachment-storage";
-import { ATTACHMENT_ALLOWED_MIME_TYPES, type AttachableEntityType } from "@/lib/validation/attachment";
+import {
+  ATTACHMENT_ALLOWED_MIME_TYPES,
+  type AttachableEntityType,
+} from "@/lib/validation/attachment";
 import {
   createAttachment,
   findAttachmentById,

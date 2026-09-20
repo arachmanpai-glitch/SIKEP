@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
@@ -167,6 +168,7 @@ export default function TagihanPage() {
           <Link href="/dashboard" className="underline">
             Dashboard
           </Link>
+          <LogoutButton />
         </div>
       </div>
 
@@ -388,7 +390,9 @@ export default function TagihanPage() {
                 <tr key={b.id} className="border-b border-zinc-100 dark:border-zinc-900">
                   <td className="py-2 pr-4">{santriNameOf(b.santriId)}</td>
                   <td className="py-2 pr-4">{nameOf(billTypes, b.billTypeId)}</td>
-                  <td className="py-2 pr-4 text-right">{moneyFormatter.format(Number(b.amount))}</td>
+                  <td className="py-2 pr-4 text-right">
+                    {moneyFormatter.format(Number(b.amount))}
+                  </td>
                   <td className="py-2 pr-4 text-right">
                     {moneyFormatter.format(Number(b.amountPaid))}
                   </td>

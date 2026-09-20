@@ -55,7 +55,9 @@ const SESSION = {
 
 describe("services/AttachmentService.uploadAttachment", () => {
   beforeEach(() => {
-    vi.mocked(findIncomeById).mockReset().mockResolvedValue({ id: "inc-1" } as never);
+    vi.mocked(findIncomeById)
+      .mockReset()
+      .mockResolvedValue({ id: "inc-1" } as never);
     vi.mocked(findExpenseById).mockReset();
     vi.mocked(findSantriPaymentById).mockReset();
     vi.mocked(generateAttachmentStorageKey)
@@ -64,7 +66,11 @@ describe("services/AttachmentService.uploadAttachment", () => {
     vi.mocked(writeAttachmentFile).mockReset().mockResolvedValue(undefined);
     vi.mocked(createAttachment)
       .mockReset()
-      .mockResolvedValue({ id: "att-1", fileName: "bukti.pdf", mimeType: "application/pdf" } as never);
+      .mockResolvedValue({
+        id: "att-1",
+        fileName: "bukti.pdf",
+        mimeType: "application/pdf",
+      } as never);
     vi.mocked(recordAudit).mockReset();
   });
 
@@ -148,7 +154,9 @@ describe("services/AttachmentService.listAttachments", () => {
   });
 
   it("returns attachments for a valid entity", async () => {
-    vi.mocked(findExpenseById).mockReset().mockResolvedValue({ id: "exp-1" } as never);
+    vi.mocked(findExpenseById)
+      .mockReset()
+      .mockResolvedValue({ id: "exp-1" } as never);
     vi.mocked(listAttachmentsForEntity)
       .mockReset()
       .mockResolvedValue([{ id: "att-1" }] as never);

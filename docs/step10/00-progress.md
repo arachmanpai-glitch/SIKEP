@@ -76,7 +76,7 @@ D75-D80):
   `app/pemasukan`, `app/pengeluaran`, `app/pembayaran` (tombol
   "Lampiran" per baris).
 - Diverifikasi: 6 file test baru lulus (unit lib+service), `npm run
-  lint`/`typecheck`/`build` 0 error/warning, dan alur nyata
+lint`/`typecheck`/`build` 0 error/warning, dan alur nyata
   upload→list→download-url→download→penolakan token tidak valid diuji
   langsung lewat browser preview (sesi BENDAHARA sungguhan, file
   tersimpan di disk, isi byte yang diunduh cocok dengan yang diunggah).

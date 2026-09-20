@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 
 interface ApprovalSettingsDto {
@@ -54,9 +55,12 @@ export default function ApprovalSettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-6 py-10">
-      <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
-        Pengaturan Approval
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
+          Pengaturan Approval
+        </h1>
+        <LogoutButton />
+      </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Threshold pengeluaran yang wajib melalui approval Yayasan (spec section 11).
       </p>

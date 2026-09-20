@@ -100,7 +100,9 @@ export async function seedE2eDatabase(prisma: PrismaClient): Promise<void> {
     const fixture = E2E_USERS[key];
     const roleId = roleIdByCode.get(USER_ROLE[key]);
     if (!roleId) {
-      throw new Error(`Role ${USER_ROLE[key]} tidak ditemukan setelah upsert — seharusnya tidak terjadi.`);
+      throw new Error(
+        `Role ${USER_ROLE[key]} tidak ditemukan setelah upsert — seharusnya tidak terjadi.`,
+      );
     }
 
     await prisma.user.create({

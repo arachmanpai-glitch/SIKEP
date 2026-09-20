@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, type FormEvent, useEffect, useState } from "react";
 
 import { AttachmentPanel } from "@/components/attachments/AttachmentPanel";
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
@@ -121,16 +122,17 @@ export default function PemasukanPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
-          Catat Pemasukan
-        </h1>
-        <Link href="/dashboard" className="text-sm underline">
-          Dashboard
-        </Link>
+        <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">Catat Pemasukan</h1>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/dashboard" className="underline">
+            Dashboard
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Pemasukan langsung diposting ke ledger (spec section 11 — tidak ada gerbang approval
-        untuk pemasukan).
+        Pemasukan langsung diposting ke ledger (spec section 11 — tidak ada gerbang approval untuk
+        pemasukan).
       </p>
 
       {error && (
@@ -163,7 +165,10 @@ export default function PemasukanPage() {
           </select>
         </div>
         <div>
-          <label htmlFor="fundSource" className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300">
+          <label
+            htmlFor="fundSource"
+            className="mb-1 block text-sm text-zinc-700 dark:text-zinc-300"
+          >
             Sumber Dana *
           </label>
           <select
@@ -256,9 +261,7 @@ export default function PemasukanPage() {
       </form>
 
       <div className="mt-8">
-        <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Riwayat Pemasukan
-        </h2>
+        <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Riwayat Pemasukan</h2>
         {isLoading ? (
           <p className="mt-2 text-sm text-zinc-500">Memuat...</p>
         ) : records.length === 0 ? (

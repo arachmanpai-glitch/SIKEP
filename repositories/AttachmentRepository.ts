@@ -27,9 +27,7 @@ function entityForeignKeys(entityType: AttachableEntityType, entityId: string) {
   }
 }
 
-export async function createAttachment(
-  data: CreateAttachmentData,
-): Promise<TransactionAttachment> {
+export async function createAttachment(data: CreateAttachmentData): Promise<TransactionAttachment> {
   return prisma.transactionAttachment.create({
     data: {
       schoolId: data.schoolId,

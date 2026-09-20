@@ -17,13 +17,13 @@ export async function loginAs(page: Page, user: E2eLoginUser): Promise<void> {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-/** The "Keluar" button only exists on `/` (app/page.tsx) — no shared
- * header/nav renders it on inner pages (app/layout.tsx has none), so a
- * real user (and this helper) has to go home first to log out. Surfaced
- * by writing this suite; not fixed here since it's a UI-navigation
- * change, not part of the E2E test task. */
+/** Clicks "Keluar" on whatever page the caller is already on — every
+ * authenticated page renders its own `<LogoutButton />` (docs/decisions.md
+ * D86; originally only `/` had one, a gap this suite surfaced). Doubles as
+ * a regression check: if a page's header ever drops the button again, the
+ * spec calling `logout()` from that page fails instead of silently
+ * passing via a `page.goto("/")` fallback. */
 export async function logout(page: Page): Promise<void> {
-  await page.goto("/");
   await page.getByRole("button", { name: "Keluar" }).click();
   await page.waitForURL("/login");
 }

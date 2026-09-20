@@ -93,7 +93,7 @@ dan sebelumnya hanya dibuat oleh `next dev`/`next build`, sehingga
   otomatis dari `DATABASE_URL` yang sudah ada.
   - Jalankan: `npm run test:e2e` — otomatis: buat database `sikep_e2e`
     kalau belum ada → `prisma migrate deploy` → reset penuh (`TRUNCATE
-    ... CASCADE`) + seed ulang deterministik (`tests/e2e/seed.ts`) →
+... CASCADE`) + seed ulang deterministik (`tests/e2e/seed.ts`) →
     jalankan browser sungguhan di port 3100. Aman dijalankan berulang —
     setiap run mulai dari state bersih yang sama.
   - `npm run test:e2e:report` — buka laporan HTML hasil run terakhir

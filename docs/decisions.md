@@ -1082,3 +1082,30 @@ eksekusi spec lain yang kebetulan mencatat pemasukan lebih dulu, jadi
 solusinya adalah saldo awal yang nyata (mekanisme `openingBalance`
 `FinancialAccount` yang memang untuk ini, bukan trik test), bukan
 mengubah urutan test atau melemahkan pemeriksaan saldo.
+
+## Perbaikan UX Kecil — Tombol "Keluar" di Semua Halaman
+
+**D86. `LogoutButton` (`components/LogoutButton.tsx`) ditambahkan ke
+HEADER SETIAP halaman terautentikasi (dashboard, laporan, tagihan,
+rekonsiliasi, audit, pemasukan, pengeluaran, pembayaran, persetujuan,
+dan seluruh `/admin/**`) — sebelumnya hanya ada di `app/page.tsx`
+(halaman `/`).**
+Alasan: ditemukan sebagai efek samping menulis `tests/e2e/specs/
+expense-approval.spec.ts` (D81-D85) — `app/layout.tsx` tidak punya
+header/nav bersama, jadi pengguna nyata terjebak tanpa cara logout dari
+`/dashboard` atau halaman lain manapun tanpa navigasi manual ke `/`
+dulu. Diperbaiki dengan cara paling minim-invasif yang konsisten dengan
+pola yang SUDAH ADA di setiap halaman (setiap halaman sudah merender
+baris header sendiri berisi judul + link "Dashboard"/nav lain) — bukan
+membangun layout/header bersama baru di `app/layout.tsx`, yang akan
+jadi restrukturisasi lebih besar di luar scope perbaikan ini. Empat
+halaman admin (`app/admin/page.tsx`, `admin/users`, `admin/santri`,
+`admin/settings`, plus `components/admin/MasterDataAdminClient.tsx`)
+sebelumnya tidak punya baris header sama sekali (`<h1>` polos) — baris
+header baru (`flex items-center justify-between`) ditambahkan khusus
+untuk menampung tombol ini, tanpa menambah link navigasi lain (di luar
+scope). `tests/e2e/helpers.ts`'s `logout()` disederhanakan mengikuti
+perbaikan ini — tidak lagi `page.goto("/")` dulu sebelum klik "Keluar",
+sekarang jadi regression check: kalau tombol ini suatu saat hilang lagi
+dari sebuah halaman, spec yang logout dari halaman itu akan gagal,
+bukan diam-diam lolos lewat fallback ke halaman utama.

@@ -219,9 +219,9 @@ D75-D80 untuk alasan lengkap tiap keputusan desain:
   otorisasinya sendiri" (lihat § RBAC di atas).
 - **Endpoint**: `POST /api/v1/attachments` (upload, BENDAHARA saja,
   sama seperti yang mencatat income/expense/payment), `GET
-  /api/v1/attachments` (list, semua role, mengikuti pola GET
+/api/v1/attachments` (list, semua role, mengikuti pola GET
   income/expense), `GET .../[id]/download-url` (terbitkan token), `GET
-  .../[id]/download` (streaming file + audit `EXPORT`, pola sama dengan
+.../[id]/download` (streaming file + audit `EXPORT`, pola sama dengan
   D50).
 - **Entity type**: hanya `INCOME_TRANSACTION`/`EXPENSE_TRANSACTION`/
   `SANTRI_PAYMENT` yang bisa dilampiri (D78) — `OPENING_BALANCE` sengaja

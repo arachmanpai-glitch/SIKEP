@@ -31,10 +31,10 @@ Lihat `.env.example` untuk daftar lengkap. Yang WAJIB diisi di production
 Opsional (punya default aman di `lib/env.ts`, lihat D75/D79 untuk
 alasan desainnya):
 
-| Variabel                         | Default                  | Keterangan                                                                                                                                                                      |
-| --------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ATTACHMENT_STORAGE_DIR`          | `./storage/attachments`   | Direktori disk PRIVAT untuk lampiran "Bukti Transaksi" — **HARUS** di luar `public/` dan idealnya di volume persisten (bukan ephemeral container filesystem) kalau redeploy tidak boleh menghapus evidence yang sudah diunggah. |
-| `ATTACHMENT_MAX_FILE_SIZE_BYTES`  | `10000000` (10 MB)        | Batas ukuran satu file lampiran.                                                                                                                                                 |
+| Variabel                         | Default                 | Keterangan                                                                                                                                                                                                                      |
+| -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ATTACHMENT_STORAGE_DIR`         | `./storage/attachments` | Direktori disk PRIVAT untuk lampiran "Bukti Transaksi" — **HARUS** di luar `public/` dan idealnya di volume persisten (bukan ephemeral container filesystem) kalau redeploy tidak boleh menghapus evidence yang sudah diunggah. |
+| `ATTACHMENT_MAX_FILE_SIZE_BYTES` | `10000000` (10 MB)      | Batas ukuran satu file lampiran.                                                                                                                                                                                                |
 
 ## Urutan Deploy
 

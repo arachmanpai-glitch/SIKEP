@@ -4,7 +4,10 @@ import { apiSuccess, handleApiError } from "@/lib/api-response";
 import { requireCsrf } from "@/lib/auth/require-csrf";
 import { ValidationError } from "@/lib/errors";
 import { requireRole, requireSession } from "@/lib/rbac";
-import { listAttachmentsQuerySchema, uploadAttachmentMetaSchema } from "@/lib/validation/attachment";
+import {
+  listAttachmentsQuerySchema,
+  uploadAttachmentMetaSchema,
+} from "@/lib/validation/attachment";
 import { listAttachments, uploadAttachment } from "@/services/AttachmentService";
 
 export async function GET(request: NextRequest) {

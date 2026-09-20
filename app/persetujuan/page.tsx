@@ -3,11 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
 const moneyFormatter = new Intl.NumberFormat(LOCALE, { style: "currency", currency: CURRENCY });
-const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" });
+const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 interface OptionDto {
   id: string;
@@ -125,9 +129,12 @@ export default function PersetujuanPage() {
         <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">
           Persetujuan Pengeluaran
         </h1>
-        <Link href="/dashboard" className="text-sm underline">
-          Dashboard
-        </Link>
+        <div className="flex items-center gap-4 text-sm">
+          <Link href="/dashboard" className="underline">
+            Dashboard
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Pengajuan dari Bendahara yang di atas ambang batas atau kategori wajib approval (spec
@@ -234,7 +241,9 @@ export default function PersetujuanPage() {
 
       {decided.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Riwayat Keputusan</h2>
+          <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Riwayat Keputusan
+          </h2>
           <table className="mt-3 w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-zinc-200 text-left dark:border-zinc-800">

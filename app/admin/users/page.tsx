@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 
+import { LogoutButton } from "@/components/LogoutButton";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { ROLE_CODES } from "@/constants/roles";
 
@@ -66,7 +67,10 @@ export default function UsersAdminPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">User</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-zinc-950 dark:text-zinc-50">User</h1>
+        <LogoutButton />
+      </div>
 
       {error && (
         <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
