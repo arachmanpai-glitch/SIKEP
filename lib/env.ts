@@ -14,6 +14,12 @@ const envSchema = z.object({
    * Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))" */
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET wajib diisi, minimal 32 karakter"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  /** Private local-disk root for "Bukti Transaksi" attachments (docs/decisions.md
+   * D75) — resolved relative to the project root, lives outside `public/` so
+   * Next.js never serves it directly. Swap for an S3-compatible bucket later
+   * without touching callers by replacing lib/storage/attachment-storage.ts. */
+  ATTACHMENT_STORAGE_DIR: z.string().min(1).default("./storage/attachments"),
+  ATTACHMENT_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(10_000_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

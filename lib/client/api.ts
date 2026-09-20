@@ -38,6 +38,28 @@ export async function apiMutate<T>(
   return json.data;
 }
 
+/**
+ * multipart/form-data POST for client components (e.g. uploading a "Bukti
+ * Transaksi" attachment) — CSRF header attached like apiMutate, but the
+ * Content-Type is deliberately left for the browser to set (it must
+ * include the multipart boundary, which fetch cannot be told manually).
+ */
+export async function apiUpload<T>(url: string, formData: FormData): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      [CSRF_HEADER_NAME]: readCookie(CSRF_COOKIE_NAME) ?? "",
+    },
+    body: formData,
+  });
+
+  const json = (await response.json()) as ApiResponseBody<T>;
+  if (!json.success) {
+    throw new Error(json.error.message);
+  }
+  return json.data;
+}
+
 export async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(url);
   const json = (await response.json()) as ApiResponseBody<T>;

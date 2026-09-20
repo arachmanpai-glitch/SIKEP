@@ -25,8 +25,9 @@ Dicek satu per satu terhadap checklist spec section 15:
 - [x] XSS protection — diverifikasi TIDAK ADA `dangerouslySetInnerHTML` di
       seluruh codebase + **BARU**: `Content-Security-Policy` header (D61)
 - [x] SQL injection protection — Prisma parameterized query di semua tempat (tidak berubah)
-- [ ] Private object storage — TIDAK diimplementasikan (lihat catatan scope di bawah)
-- [ ] Signed URLs — TIDAK diimplementasikan (terkait poin di atas)
+- [x] Private object storage — diisi 2026-09-20 lewat instruksi eksplisit
+      terpisah (di luar 12 phase resmi), lihat pembaruan di bawah + D75-D80
+- [x] Signed URLs — diisi bersamaan dengan poin di atas, lihat D76
 - [x] Audit log — sudah berjalan sejak PHASE 5, dibaca PHASE 9 (tidak berubah)
 - [x] **BARU**: Security headers menyeluruh — `X-Frame-Options: DENY`,
       `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
@@ -34,7 +35,7 @@ Dicek satu per satu terhadap checklist spec section 15:
 - [x] **BARU**: `poweredByHeader: false` — `X-Powered-By` tidak lagi dikirim
 - [x] **BARU**: `npm audit` diverifikasi ulang — temuan sama seperti PHASE 8, tidak ada yang baru
 
-## Catatan Scope: Object Storage / Signed URLs
+## Catatan Scope: Object Storage / Signed URLs (asli, PHASE 10)
 
 Modul "Bukti Transaksi" (spec section 6) — yang membutuhkan private object
 storage (S3-compatible) dan signed URL (spec section 15) — **tidak pernah
@@ -51,6 +52,34 @@ signifikan (dependency AWS SDK baru, endpoint upload/download baru, alur
 otorisasi baru) yang tidak diminta eksplisit. Ini dicatat sebagai **gap
 yang disadari**, bukan celah yang terlewat — kandidat untuk instruksi
 eksplisit terpisah kapan pun dibutuhkan.
+
+## Update 2026-09-20: Gap Diisi (Instruksi Eksplisit Terpisah, Bukan PHASE 13)
+
+Gap di atas diisi atas instruksi eksplisit terpisah, BUKAN dengan
+menambah "PHASE 13" tersembunyi — 12 phase resmi tetap selesai dan utuh
+seperti dicatat PHASE 12. Ringkasan (detail lengkap: `docs/decisions.md`
+D75-D80):
+
+- **Private object storage**: disk lokal privat di luar `public/`
+  (`lib/storage/attachment-storage.ts`), bukan S3 sungguhan — lingkungan
+  ini tidak punya kredensial cloud untuk verifikasi nyata (D75, sama
+  seperti alasan D71 tidak ada dependency S3 runtime). Kunci penyimpanan
+  100% dibuat server (tidak pernah memuat nama file dari pengguna), jadi
+  path traversal tertutup by construction.
+- **Signed URL**: token HMAC-SHA256 lokal 5 menit
+  (`lib/attachments/download-token.ts`, D76) di ATAS sesi yang tetap
+  wajib — bukan bearer link anonim, konsisten dengan aturan inti
+  `lib/rbac.ts`.
+- Endpoint baru: `POST /api/v1/attachments` (upload, BENDAHARA),
+  `GET /api/v1/attachments` (list), `GET .../[id]/download-url`,
+  `GET .../[id]/download`. UI: panel "Bukti Transaksi" di
+  `app/pemasukan`, `app/pengeluaran`, `app/pembayaran` (tombol
+  "Lampiran" per baris).
+- Diverifikasi: 6 file test baru lulus (unit lib+service), `npm run
+  lint`/`typecheck`/`build` 0 error/warning, dan alur nyata
+  upload→list→download-url→download→penolakan token tidak valid diuji
+  langsung lewat browser preview (sesi BENDAHARA sungguhan, file
+  tersimpan di disk, isi byte yang diunduh cocok dengan yang diunggah).
 
 ## Hasil Validasi
 

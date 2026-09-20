@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useState } from "react";
 
+import { AttachmentPanel } from "@/components/attachments/AttachmentPanel";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
@@ -48,6 +49,7 @@ export default function PemasukanPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function reload() {
     setIsLoading(true);
@@ -275,62 +277,84 @@ export default function PemasukanPage() {
             </thead>
             <tbody>
               {records.map((r) => (
-                <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-2 pr-4">{dateFormatter.format(new Date(r.transactionDate))}</td>
-                  <td className="py-2 pr-4">{nameOf(accounts, r.financialAccountId)}</td>
-                  <td className="py-2 pr-4">{nameOf(categories, r.categoryId)}</td>
-                  <td className="py-2 pr-4 text-right">{moneyFormatter.format(Number(r.amount))}</td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={
-                        r.status === "POSTED"
-                          ? "text-green-700 dark:text-green-400"
-                          : "text-zinc-500 line-through"
-                      }
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">
-                    {r.status === "POSTED" &&
-                      (voidingId === r.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            autoFocus
-                            placeholder="Alasan..."
-                            value={voidReason}
-                            onChange={(e) => setVoidReason(e.target.value)}
-                            className="w-32 rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleVoid(r.id)}
-                            className="text-xs text-red-600 hover:underline dark:text-red-400"
-                          >
-                            Konfirmasi
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setVoidingId(null);
-                              setVoidReason("");
-                            }}
-                            className="text-xs text-zinc-500 hover:underline"
-                          >
-                            Batal
-                          </button>
-                        </div>
-                      ) : (
+                <Fragment key={r.id}>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-900">
+                    <td className="py-2 pr-4">
+                      {dateFormatter.format(new Date(r.transactionDate))}
+                    </td>
+                    <td className="py-2 pr-4">{nameOf(accounts, r.financialAccountId)}</td>
+                    <td className="py-2 pr-4">{nameOf(categories, r.categoryId)}</td>
+                    <td className="py-2 pr-4 text-right">
+                      {moneyFormatter.format(Number(r.amount))}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={
+                          r.status === "POSTED"
+                            ? "text-green-700 dark:text-green-400"
+                            : "text-zinc-500 line-through"
+                        }
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setVoidingId(r.id)}
-                          className="text-xs text-red-600 hover:underline dark:text-red-400"
+                          onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                          className="text-xs text-zinc-600 hover:underline dark:text-zinc-400"
                         >
-                          Batalkan
+                          Lampiran
                         </button>
-                      ))}
-                  </td>
-                </tr>
+                        {r.status === "POSTED" &&
+                          (voidingId === r.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                autoFocus
+                                placeholder="Alasan..."
+                                value={voidReason}
+                                onChange={(e) => setVoidReason(e.target.value)}
+                                className="w-32 rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void handleVoid(r.id)}
+                                className="text-xs text-red-600 hover:underline dark:text-red-400"
+                              >
+                                Konfirmasi
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVoidingId(null);
+                                  setVoidReason("");
+                                }}
+                                className="text-xs text-zinc-500 hover:underline"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setVoidingId(r.id)}
+                              className="text-xs text-red-600 hover:underline dark:text-red-400"
+                            >
+                              Batalkan
+                            </button>
+                          ))}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedId === r.id && (
+                    <tr className="border-b border-zinc-100 dark:border-zinc-900">
+                      <td colSpan={6} className="bg-zinc-50 py-2 pr-4 dark:bg-zinc-950">
+                        <AttachmentPanel entityType="INCOME_TRANSACTION" entityId={r.id} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

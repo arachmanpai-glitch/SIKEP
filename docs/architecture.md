@@ -199,6 +199,34 @@ mencegah transaksi ganda.
 - **Role**: hanya 3 kode tetap (`constants/roles.ts`, `ROLE_CODES`) —
   ADMIN/BENDAHARA/YAYASAN — divalidasi terhadap tabel `roles` (D12).
 
+### Bukti Transaksi: Object Storage + Signed URL (gap PHASE 10, diisi 2026-09-20)
+
+`transaction_attachments` (skema sejak PHASE 2) baru mendapat endpoint
+upload/download di luar 12 phase resmi — lihat `docs/decisions.md`
+D75-D80 untuk alasan lengkap tiap keputusan desain:
+
+- **Storage**: disk lokal privat di luar `public/`
+  (`lib/storage/attachment-storage.ts`), di belakang abstraksi yang bisa
+  diganti S3-compatible tanpa mengubah pemanggilnya. `storageKey` 100%
+  dibuat server (UUID sekolah/entitas + UUID acak) — TIDAK PERNAH memuat
+  nama file dari pengguna, sehingga path traversal tertutup by
+  construction (D75).
+- **Signed URL**: token HMAC-SHA256 lokal berumur 5 menit
+  (`lib/attachments/download-token.ts`), diturunkan dari `AUTH_SECRET`
+  dengan pemisahan kunci dari JWT sesi. Bukan bearer link anonim — route
+  download tetap mewajibkan sesi + tenant match di ATAS token yang valid
+  (D76), konsisten dengan aturan inti "setiap route validasi ulang
+  otorisasinya sendiri" (lihat § RBAC di atas).
+- **Endpoint**: `POST /api/v1/attachments` (upload, BENDAHARA saja,
+  sama seperti yang mencatat income/expense/payment), `GET
+  /api/v1/attachments` (list, semua role, mengikuti pola GET
+  income/expense), `GET .../[id]/download-url` (terbitkan token), `GET
+  .../[id]/download` (streaming file + audit `EXPORT`, pola sama dengan
+  D50).
+- **Entity type**: hanya `INCOME_TRANSACTION`/`EXPENSE_TRANSACTION`/
+  `SANTRI_PAYMENT` yang bisa dilampiri (D78) — `OPENING_BALANCE` sengaja
+  dikecualikan, tidak punya kolom FK di `transaction_attachments` (D17).
+
 ### XSS & SQL Injection
 
 Proteksi didapat "gratis" dari React (auto-escaping) dan Prisma

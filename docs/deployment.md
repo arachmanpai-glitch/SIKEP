@@ -28,6 +28,14 @@ Lihat `.env.example` untuk daftar lengkap. Yang WAJIB diisi di production
 | `APP_URL`      | URL publik aplikasi (dipakai untuk link, dsb).                                                                                                                                                                                                                               |
 | `LOG_LEVEL`    | Disarankan `info` di production (`debug`/`trace` bisa membocorkan detail berlebihan ke log meski `lib/logger.ts` sudah redact field sensitif, D5).                                                                                                                           |
 
+Opsional (punya default aman di `lib/env.ts`, lihat D75/D79 untuk
+alasan desainnya):
+
+| Variabel                         | Default                  | Keterangan                                                                                                                                                                      |
+| --------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ATTACHMENT_STORAGE_DIR`          | `./storage/attachments`   | Direktori disk PRIVAT untuk lampiran "Bukti Transaksi" — **HARUS** di luar `public/` dan idealnya di volume persisten (bukan ephemeral container filesystem) kalau redeploy tidak boleh menghapus evidence yang sudah diunggah. |
+| `ATTACHMENT_MAX_FILE_SIZE_BYTES`  | `10000000` (10 MB)        | Batas ukuran satu file lampiran.                                                                                                                                                 |
+
 ## Urutan Deploy
 
 ```bash
@@ -80,14 +88,22 @@ deployment multi-instance dibutuhkan.
 ## Gap yang Disadari (Belum Diimplementasikan)
 
 Dicatat secara eksplisit supaya tidak disalahartikan sebagai celah yang
-terlewat — keduanya sudah tercatat sejak phase sebelumnya:
+terlewat:
+
+- **E2E test** — butuh PostgreSQL nyata + Playwright/Cypress, tidak
+  tersedia di lingkungan pengembangan manapun sepanjang PHASE 1-12
+  (lihat `docs/step11/00-progress.md`). Masih terbuka per 2026-09-20 —
+  kandidat instruksi eksplisit terpisah, sama seperti object
+  storage/signed URL di bawah sebelum diisi.
+
+Sudah diisi (bukan lagi gap, disebut di sini supaya riwayatnya jelas):
 
 - **Private object storage / signed URL** (modul "Bukti Transaksi") —
   tidak pernah dijadwalkan di salah satu dari 12 nama phase resmi
-  (lihat `docs/step10/00-progress.md`).
-- **E2E test** — butuh PostgreSQL nyata + Playwright/Cypress, tidak
-  tersedia di lingkungan pengembangan manapun sepanjang PHASE 1-12
-  (lihat `docs/step11/00-progress.md`).
-
-Keduanya adalah kandidat instruksi eksplisit terpisah, bukan sesuatu yang
-"lupa" dikerjakan.
+  (lihat `docs/step10/00-progress.md`), diisi 2026-09-20 lewat instruksi
+  eksplisit terpisah. Storage disk lokal privat (BUKAN S3 sungguhan —
+  tidak ada kredensial cloud untuk verifikasi nyata di lingkungan ini),
+  di belakang abstraksi yang bisa diganti S3 tanpa mengubah pemanggilnya
+  (`docs/decisions.md` D75-D80). **Konsekuensi operasional**: pastikan
+  `ATTACHMENT_STORAGE_DIR` (lihat tabel env var di atas) menunjuk ke
+  volume persisten di production, bukan filesystem container ephemeral.

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useState } from "react";
 
+import { AttachmentPanel } from "@/components/attachments/AttachmentPanel";
 import { apiGet, apiMutate } from "@/lib/client/api";
 import { CURRENCY, LOCALE } from "@/constants/app";
 
@@ -76,6 +77,7 @@ export default function PembayaranPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function loadMasterData() {
     setIsLoading(true);
@@ -408,37 +410,55 @@ export default function PembayaranPage() {
                 </thead>
                 <tbody>
                   {payments.map((p) => (
-                    <tr key={p.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-2 pr-4">
-                        {dateFormatter.format(new Date(p.paymentDate))}
-                      </td>
-                      <td className="py-2 pr-4 text-right">
-                        {moneyFormatter.format(Number(p.amount))}
-                      </td>
-                      <td className="py-2 pr-4">{p.referenceNo ?? "-"}</td>
-                      <td className="py-2 pr-4">
-                        <span
-                          className={
-                            p.status === "POSTED"
-                              ? "text-green-700 dark:text-green-400"
-                              : "text-zinc-500 line-through"
-                          }
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {p.status === "POSTED" && (
-                          <button
-                            type="button"
-                            onClick={() => void handleVoid(p.id)}
-                            className="text-xs text-red-600 hover:underline dark:text-red-400"
+                    <Fragment key={p.id}>
+                      <tr className="border-b border-zinc-100 dark:border-zinc-900">
+                        <td className="py-2 pr-4">
+                          {dateFormatter.format(new Date(p.paymentDate))}
+                        </td>
+                        <td className="py-2 pr-4 text-right">
+                          {moneyFormatter.format(Number(p.amount))}
+                        </td>
+                        <td className="py-2 pr-4">{p.referenceNo ?? "-"}</td>
+                        <td className="py-2 pr-4">
+                          <span
+                            className={
+                              p.status === "POSTED"
+                                ? "text-green-700 dark:text-green-400"
+                                : "text-zinc-500 line-through"
+                            }
                           >
-                            Batalkan
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                              className="text-xs text-zinc-600 hover:underline dark:text-zinc-400"
+                            >
+                              Lampiran
+                            </button>
+                            {p.status === "POSTED" && (
+                              <button
+                                type="button"
+                                onClick={() => void handleVoid(p.id)}
+                                className="text-xs text-red-600 hover:underline dark:text-red-400"
+                              >
+                                Batalkan
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedId === p.id && (
+                        <tr className="border-b border-zinc-100 dark:border-zinc-900">
+                          <td colSpan={5} className="bg-zinc-50 py-2 pr-4 dark:bg-zinc-950">
+                            <AttachmentPanel entityType="SANTRI_PAYMENT" entityId={p.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

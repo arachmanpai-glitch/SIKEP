@@ -927,3 +927,92 @@ versi Next.js ini punya breaking change dari pengetahuan umum,
 mewajibkan baca dokumentasi lokal sebelum menulis kode — verifikasi
 langsung ke `node_modules/next/dist/docs/` inilah yang mengungkap
 pergantian nama prop ini.
+
+## Gap Fill (di luar 12 phase resmi) — Bukti Transaksi: Object Storage + Signed URL
+
+**D75. "Bukti Transaksi" (spec section 6/15, gap yang dicatat sejak PHASE
+10 — lihat `docs/step10/00-progress.md`) diimplementasikan dengan
+penyimpanan disk lokal PRIVAT (`lib/storage/attachment-storage.ts`, di
+luar `public/`) di belakang abstraksi yang sama dengan yang dipakai
+object storage S3-compatible, BUKAN integrasi S3/AWS SDK sungguhan.**
+Alasan: lingkungan pengembangan ini tidak memiliki kredensial cloud
+storage nyata untuk diverifikasi ujung-ke-ujung (prinsip yang sama
+dengan D71 — SIKEP sengaja tidak punya dependency S3 di runtime).
+Menulis integrasi AWS SDK yang tidak pernah benar-benar dites terhadap
+bucket sungguhan akan melanggar disiplin "verifikasi nyata, bukan
+diklaim" yang dipegang sejak PHASE 12. Desainnya tetap S3-ready: kunci
+penyimpanan (`storageKey`) 100% dibuat di server (schoolId/entityType
+UUID+enum tervalidasi + UUID acak baru) — TIDAK PERNAH memuat nama file
+asli dari pengguna — sehingga path traversal tertutup by construction,
+bukan oleh sanitasi, dan pengait S3 sungguhan bisa menggantikan
+`lib/storage/attachment-storage.ts` tanpa mengubah pemanggilnya
+(`services/AttachmentService.ts`).
+
+**D76. "Signed URL" diimplementasikan sebagai token HMAC-SHA256 lokal
+berumur pendek (5 menit, `lib/attachments/download-token.ts`), diturunkan
+dari `AUTH_SECRET` dengan pemisahan kunci (label berbeda dari
+penandatanganan JWT sesi, `lib/auth/session.ts`) — BUKAN kredensial
+bearer yang berdiri sendiri: `GET /api/v1/attachments/[id]/download`
+tetap mewajibkan sesi valid + tenant match di atas token yang valid.**
+Alasan: prinsip inti `lib/rbac.ts` ("setiap route memvalidasi ulang
+otorisasinya sendiri", lihat komentarnya) berlaku juga di sini — presigned
+URL S3 asli biasanya adalah bearer link anonim, tapi itu tidak cocok
+untuk bukti transaksi finansial yang selalu berada di bawah RBAC/tenant
+isolation SIKEP. Nilai nyata token ini: membatasi jendela waktu satu
+tautan lampiran tetap valid (5 menit) secara independen dari umur sesi
+(8 jam) — bukan sekadar "session cookie yang kebetulan melindungi rute
+ini". Alur: `GET .../download-url` (baca murni, tanpa side effect,
+tidak perlu CSRF) menerbitkan token, `GET .../download` memvalidasinya
+lalu mencatat audit `EXPORT` (pola yang sama dengan D50 — GET dengan
+audit write, dibatasi hanya `audit_logs`).
+
+**D77. `AuditAction.CREATE` dipakai untuk upload lampiran dan
+`AuditAction.EXPORT` untuk download lampiran — TIDAK menambah nilai
+enum baru (mis. `UPLOAD`/`DOWNLOAD`) ke `AuditAction`.**
+Alasan: komentar `prisma/schema.prisma` di atas `enum AuditAction`
+eksplisit — "Per spec section 16 — exact list, do not extend without a
+spec change." `EXPORT` sudah dipakai persis untuk pola "mengeluarkan
+byte data dari sistem" oleh `app/api/v1/reports/*/export/route.ts`
+(laporan PDF/XLSX) — mengunduh lampiran adalah kasus yang sama secara
+semantik, jadi memakai ulang nilai yang sudah ada lebih tepat daripada
+memperluas daftar yang secara eksplisit dikunci.
+
+**D78. Field FK `transaction_attachments` yang bisa menerima lampiran
+dibatasi ke `INCOME_TRANSACTION`/`EXPENSE_TRANSACTION`/`SANTRI_PAYMENT`
+(`ATTACHABLE_ENTITY_TYPES`, `lib/validation/attachment.ts`) — bukan
+seluruh `FinancialEntityType`.**
+Alasan: `OPENING_BALANCE` adalah anggota `FinancialEntityType` (dipakai
+bersama oleh `approval_requests`/`reversal_transactions`) tapi
+`transaction_attachments` (D17) hanya punya tiga kolom FK nullable
+bertipe — tidak ada `openingBalanceId`. Memvalidasi `entityType` upload
+terhadap daftar sempit ini mencegah baris lampiran yang FK-nya tidak
+akan pernah terisi (`entityForeignKeys`,
+`repositories/AttachmentRepository.ts`, memakai `switch` exhaustive atas
+tipe sempit ini, bukan `default: throw` atas enum penuh).
+
+**D79. Batas ukuran file (`ATTACHMENT_MAX_FILE_SIZE_BYTES`, default 10
+MB) dan direktori penyimpanan (`ATTACHMENT_STORAGE_DIR`) dibuat
+konfigurabel lewat `lib/env.ts`, tapi daftar tipe MIME yang diizinkan
+(`ATTACHMENT_ALLOWED_MIME_TYPES` — JPEG/PNG/WebP/PDF) di-hardcode di
+`lib/validation/attachment.ts`, TIDAK lewat env.**
+Alasan: ukuran/lokasi disk adalah keputusan operasional yang wajar
+berbeda per deployment (mengikuti pola `DATABASE_URL`/`LOG_LEVEL`),
+sedangkan tipe file yang diterima adalah keputusan keamanan/bisnis inti
+(mencegah upload executable/script berkedok "bukti transaksi") — sama
+seperti `ROLE_CODES` (`constants/roles.ts`) dan `AuditAction`, sengaja
+dikunci di kode, bukan di environment, supaya tidak bisa dilonggarkan
+diam-diam lewat konfigurasi deployment.
+
+**D80. `next.config.ts`'s Turbopack build memperingatkan "Dynamic
+filesystem access causes tracing of the whole project" untuk
+`path.resolve(process.cwd(), env.ATTACHMENT_STORAGE_DIR)` — diredam
+dengan komentar `/* turbopackIgnore: true */`, BUKAN dihilangkan dengan
+membuat direktori jadi statis.**
+Alasan: `ATTACHMENT_STORAGE_DIR` sengaja env-driven (D79) supaya ops
+bisa memindah lokasi disk tanpa ubah kode — Turbopack tidak bisa
+membuktikan itu secara statis, sehingga tanpa komentar ini seluruh
+project (termasuk `public/`) ikut ter-trace dan diikutkan ke server
+bundle (lihat `docs/deployment.md`). Trade-off yang diterima: mengubah
+env var ini butuh redeploy, sama seperti nilai `lib/env.ts` lainnya —
+diverifikasi `npm run build` menghasilkan 0 warning setelah perbaikan
+ini.
