@@ -85,6 +85,25 @@ dan sebelumnya hanya dibuat oleh `next dev`/`next build`, sehingga
   `coverage/`, di-gitignore). `app/**`/`components/**` sengaja
   dikecualikan dari coverage (D69) — tidak ada rendering test React di
   proyek ini (`environment: "node"`, bukan `jsdom`).
+- `tests/e2e/**` (gap PHASE 11 diisi 2026-09-20, D81-D85) — Playwright,
+  browser Chromium sungguhan melawan `next dev` sungguhan melawan
+  database Postgres KHUSUS `sikep_e2e` (bukan `sikep`). Butuh PostgreSQL
+  lokal berjalan (sama seperti bagian Database di bawah) — TIDAK butuh
+  setup `.env` tambahan, connection string `sikep_e2e` diturunkan
+  otomatis dari `DATABASE_URL` yang sudah ada.
+  - Jalankan: `npm run test:e2e` — otomatis: buat database `sikep_e2e`
+    kalau belum ada → `prisma migrate deploy` → reset penuh (`TRUNCATE
+    ... CASCADE`) + seed ulang deterministik (`tests/e2e/seed.ts`) →
+    jalankan browser sungguhan di port 3100. Aman dijalankan berulang —
+    setiap run mulai dari state bersih yang sama.
+  - `npm run test:e2e:report` — buka laporan HTML hasil run terakhir
+    (`playwright-report/`, di-gitignore).
+  - Spec: `tests/e2e/specs/*.spec.ts`, satu skenario golden-path per
+    file (login, catat pemasukan, ajukan+approve pengeluaran lintas-role,
+    upload+download Bukti Transaksi). Bukan pengganti
+    `tests/integration/**` — E2E ini sengaja hanya beberapa skenario
+    inti (biaya lambat, butuh browser+DB nyata), bukan matriks kasus
+    tepi yang sudah dites lebih murah di layer lain.
 
 ## Database (Prisma)
 

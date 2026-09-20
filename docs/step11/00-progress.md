@@ -23,11 +23,12 @@ financial-integrity.test.ts`, skenario PERSIS spec section 18
       route handler ASLI (`GET`/`POST` dari `app/api/v1/**/route.ts`)
       dipanggil dengan `NextRequest` sungguhan (D67) — lapisan yang belum
       pernah diuji otomatis sebelumnya
-- [ ] E2E Test — **TIDAK diimplementasikan**, lihat catatan scope di bawah
+- [x] E2E Test — diisi 2026-09-20 lewat instruksi eksplisit terpisah
+      (di luar 12 phase resmi), lihat pembaruan di bawah + D81-D85
 - [x] Skenario "concurrent transaction" spec section 18 dites persis
       seperti yang diminta (Rp1.000.000, dua Rp700.000)
 
-## Catatan Scope: E2E Test
+## Catatan Scope: E2E Test (asli, PHASE 11)
 
 E2E test (login sungguhan di browser → isi form → submit → verifikasi
 hasil tersimpan) butuh: (1) PostgreSQL nyata dengan data ter-seed, dan
@@ -44,6 +45,51 @@ tertinggi yang tercapai dari "service layer" ke "route handler layer"
 perilaku HTTP sungguhan tanpa benar-benar butuh server berjalan. E2E
 sesungguhnya dicatat sebagai kandidat PHASE 12 (PRODUCTION) atau kapan
 pun akses ke PostgreSQL/staging environment tersedia.
+
+## Update 2026-09-20: Gap Diisi (Instruksi Eksplisit Terpisah, Bukan PHASE 13)
+
+PostgreSQL lokal sudah tersedia (dipasang & di-seed lewat sesi
+sebelumnya, lihat memory proyek) sehingga gap di atas bisa diisi. Diisi
+atas instruksi eksplisit terpisah — 12 phase resmi tetap selesai dan
+utuh, bukan phase tersembunyi baru. Ringkasan (detail lengkap:
+`docs/decisions.md` D81-D85):
+
+- **Test runner**: Playwright (`@playwright/test`), config di
+  `playwright.config.ts` (root) + `tests/e2e/`.
+- **Database**: `sikep_e2e`, TERPISAH dari `sikep` dev — connection
+  string diturunkan otomatis dari `DATABASE_URL` yang sudah ada di
+  `.env` (`tests/e2e/db.ts`), tanpa perlu setup manual/kredensial baru
+  (D82). Dibuat otomatis kalau belum ada, di-migrate, lalu di-reset +
+  di-seed ulang deterministik SETIAP run (`tests/e2e/global-setup.ts` +
+  `tests/e2e/seed.ts`, D81/D83) — tidak pernah menyentuh data dev `sikep`
+  yang sudah berisi hasil kerja manual.
+- **4 skenario golden-path**, satu per file di `tests/e2e/specs/`:
+  `auth.spec.ts` (login benar/salah/logout, real session cookie),
+  `income.spec.ts` (catat pemasukan → langsung POSTED),
+  `expense-approval.spec.ts` (Bendahara ajukan di atas ambang batas →
+  Yayasan approve di sesi browser TERPISAH → POSTED — satu-satunya
+  lapisan test yang membuktikan handoff lintas-role sungguhan, bukan
+  lewat mock), `attachment.spec.ts` (upload file SUNGGUHAN lewat
+  `setInputFiles`, sesuatu yang alat browser-automation non-Playwright
+  di sesi sebelumnya tidak bisa lakukan — lalu unduh ulang & verifikasi
+  byte-for-byte identik).
+- **2 bug ditemukan lewat kegagalan nyata saat menjalankan suite, bukan
+  diasumsikan**: rate limiting login (D19) sungguhan memblokir login
+  ke-6 dengan email yang sama dalam satu run (diperbaiki dengan
+  identitas BENDAHARA terpisah per spec, D84); dan pengajuan pengeluaran
+  ditolak `FinancialIntegrityError` "Saldo akun tidak mencukupi" karena
+  fixture rekening bersaldo nol (diperbaiki dengan `openingBalance`
+  nyata, D85, BUKAN dengan melemahkan pemeriksaan saldo — aplikasi sudah
+  benar, fixture-nya yang kurang realistis).
+- **Temuan UX di luar scope task ini, dicatat bukan diperbaiki**: tombol
+  "Keluar" (logout) hanya ada di halaman `/` — tidak ada header/nav
+  bersama di `app/layout.tsx` yang merender itu di halaman lain
+  (`/dashboard`, `/pemasukan`, dst.), jadi pengguna harus kembali ke `/`
+  dulu untuk logout dari halaman manapun.
+- Diverifikasi: `npx playwright test` dijalankan BERULANG (bukan sekali)
+  — 6/6 lolos secara konsisten, membuktikan seed/reset deterministik,
+  bukan kebetulan lolos sekali. `npm run lint`/`typecheck`/`test`
+  (303/303, tidak berubah)/`build` tetap 0 error/warning.
 
 ## Hasil Validasi
 

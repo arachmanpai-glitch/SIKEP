@@ -1016,3 +1016,69 @@ bundle (lihat `docs/deployment.md`). Trade-off yang diterima: mengubah
 env var ini butuh redeploy, sama seperti nilai `lib/env.ts` lainnya —
 diverifikasi `npm run build` menghasilkan 0 warning setelah perbaikan
 ini.
+
+## Gap Fill (di luar 12 phase resmi) — E2E Test dengan PostgreSQL Nyata
+
+**D81. E2E test (spec section 18, gap yang dicatat sejak PHASE 11 — lihat
+`docs/step11/00-progress.md`) memakai Playwright melawan database
+Postgres KHUSUS (`sikep_e2e`), TERPISAH dari database dev `sikep` yang
+sudah berisi data hasil kerja manual — BUKAN dijalankan melawan `sikep`
+langsung.**
+Alasan: `sikep` sudah berisi transaksi nyata dari sesi testing manual
+sebelumnya (lihat memory proyek) — menjalankan test yang me-reset/
+mengasumsikan state tertentu terhadap database itu berisiko merusak data
+kerja yang sudah ada, dan sebaliknya, data yang sudah ada di `sikep`
+membuat assertion E2E tidak deterministik (jumlah baris, saldo, dsb.
+tidak bisa diprediksi). `sikep_e2e` di-reset penuh (`TRUNCATE ...
+CASCADE`) dan di-seed ulang deterministik setiap kali suite dijalankan
+(`tests/e2e/seed.ts`), memberi setiap run titik awal yang identik.
+
+**D82. Connection string `sikep_e2e` DITURUNKAN secara terprogram dari
+`DATABASE_URL` yang sudah ada di `.env` (`tests/e2e/db.ts`,
+`resolveE2eDatabaseUrl()` — ganti nama database saja, host/user/password
+tetap), BUKAN kredensial baru yang di-hardcode atau diminta manual dari
+pengguna.**
+Alasan: `.env` (dan isinya) sengaja berada di luar jangkauan baca
+langsung (proteksi direktori) — pola yang sama dipakai
+`prisma.config.ts` (juga `import "dotenv/config"` lalu membaca
+`DATABASE_URL` dari `process.env`, bukan membaca file secara manual)
+diikuti di sini, bukan dilanggar. Efek sampingnya menguntungkan: nol
+langkah setup tambahan untuk pengguna — role Postgres yang sudah berhasil
+dipakai `npm run dev` otomatis juga dipakai E2E, tidak pernah butuh
+`.env` diedit atau password superuser diketik ulang di mana pun.
+
+**D83. `tests/e2e/global-setup.ts` membuat database `sikep_e2e` sendiri
+kalau belum ada (`CREATE DATABASE` lewat koneksi maintenance ke database
+`postgres`), memberi pesan error eksplisit (bukan crash generik) kalau
+role di `DATABASE_URL` tidak punya hak `CREATEDB`.**
+Alasan: konsisten dengan filosofi `lib/env.ts` ("gagal start dengan
+pesan jelas") — dijalankan sekali per proses `npx playwright test`,
+idempotent (mendeteksi error Postgres `42P04` "duplicate_database" dan
+melanjutkan, bukan gagal di run kedua dan seterusnya).
+
+**D84. Setiap spec file yang butuh login BENDAHARA memakai IDENTITAS
+BENDAHARA-nya SENDIRI (`BENDAHARA_AUTH`/`BENDAHARA_INCOME`/
+`BENDAHARA_EXPENSE`/`BENDAHARA_ATTACHMENT`, `tests/e2e/seed.ts`) —
+BUKAN satu akun BENDAHARA yang dipakai bersama di semua spec.**
+Alasan: ditemukan lewat kegagalan nyata saat menjalankan suite —
+`lib/auth/rate-limit.ts` (D19) membatasi 5 percobaan login/15 menit per
+kombinasi IP+email, dan setiap request dari suite ini berbagi IP
+"unknown" yang sama (tidak ada header `x-forwarded-for` di `next dev`
+lokal), sehingga satu akun BENDAHARA yang dipakai ulang di seluruh
+spec file melewati 5 percobaan dan terkena rate limit di tengah run.
+Bukti nyata rate limiting PHASE 3 bekerja (bukan cuma diklaim) — bonus
+temuan dari menulis E2E sungguhan, sekaligus mengonfirmasi kenapa
+perbaikannya adalah identitas terpisah, bukan melonggarkan limiter.
+
+**D85. Rekening kas fixture E2E (`Kas Utama E2E`) diberi
+`openingBalance: "10000000.00"` di seed, BUKAN saldo nol.**
+Alasan: ditemukan lewat kegagalan nyata — `expense-approval.spec.ts`
+mengajukan pengeluaran Rp1.543.210 yang HARUS lolos approval dan
+terposting; dengan saldo nol/terlalu kecil, `ApprovalService.approve`
+dengan benar menolaknya (`FinancialIntegrityError`, "Saldo akun tidak
+mencukupi") — perilaku aplikasi yang BENAR, bukan bug. Setiap spec file
+harus berdiri sendiri secara finansial tanpa bergantung pada urutan
+eksekusi spec lain yang kebetulan mencatat pemasukan lebih dulu, jadi
+solusinya adalah saldo awal yang nyata (mekanisme `openingBalance`
+`FinancialAccount` yang memang untuk ini, bukan trik test), bukan
+mengubah urutan test atau melemahkan pemeriksaan saldo.

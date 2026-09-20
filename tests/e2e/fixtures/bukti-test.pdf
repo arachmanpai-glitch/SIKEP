@@ -1,0 +1,2 @@
+%PDF-1.4 SIKEP E2E test fixture — not a real PDF, only used to exercise the
+"Bukti Transaksi" upload/download flow in tests/e2e/specs/attachment.spec.ts.
