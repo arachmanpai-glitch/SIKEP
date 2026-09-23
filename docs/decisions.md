@@ -1109,3 +1109,66 @@ perbaikan ini — tidak lagi `page.goto("/")` dulu sebelum klik "Keluar",
 sekarang jadi regression check: kalau tombol ini suatu saat hilang lagi
 dari sebuah halaman, spec yang logout dari halaman itu akan gagal,
 bukan diam-diam lolos lewat fallback ke halaman utama.
+
+## Deploy Production Pertama (Vercel + Neon, 2026-09-23)
+
+**D87. `package.json` mendapat `"postinstall": "prisma generate"` —
+sebelumnya Prisma Client hanya di-generate manual (`npm run db:generate`)
+atau efek samping `npm run dev`/`npm run typecheck` yang sudah pernah
+dijalankan di lingkungan itu.**
+Alasan: ditemukan lewat kegagalan build sungguhan di Vercel — deploy
+production pertama gagal total dengan puluhan error TypeScript
+("Module '@prisma/client' has no exported member ...") di hampir semua
+`services/*.ts`. Root cause: mesin build Vercel selalu mulai dari
+`node_modules` bersih setiap deploy (tidak pernah mewarisi
+`node_modules/@prisma/client` yang sudah di-generate dari sesi dev lokal
+manapun), dan `npm run build` (`next build`) TIDAK pernah memanggil
+`prisma generate` sendiri — bug laten ini sudah ada sejak PHASE 1, hanya
+tidak pernah terdeteksi karena lingkungan dev lokal manapun sebelum ini
+sudah lebih dulu menjalankan `prisma generate` secara manual/tidak
+sengaja. `postinstall` adalah hook npm standar yang otomatis jalan
+setelah `npm install`/`npm ci` — memperbaikinya di sini berarti
+diperbaiki untuk SEMUA target deploy (bukan cuma Vercel), bukan
+workaround khusus platform.
+
+**D88. `scripts/bootstrap-admin.ts` ditambahkan sebagai script resmi
+untuk membuat sekolah + ADMIN pertama di database production baru —
+menggantikan contoh inline `npx tsx -e "..."` yang sebelumnya cuma ada
+di komentar `docs/development.md`.**
+Alasan: dipakai sungguhan untuk deploy production pertama (Pesantren
+Modern Al-Jumhuriyah, 2026-09-23) — contoh inline lama tidak bisa
+dijalankan langsung (butuh diketik ulang manual, gampang salah karena
+harus import `createPasswordHash` yang balik mengimpor
+`repositories/UserRepository`→`lib/prisma.ts`, memicu koneksi DB module-
+level yang tidak diinginkan untuk script sekali-pakai). Script baru ini
+mandiri (duplikat parameter Argon2id dari `lib/auth/password.ts` alih-
+alih mengimpornya, sama seperti alasan `prisma/seed.ts` sudah memakai
+`PrismaPg` adapter sendiri, bukan `lib/prisma.ts`), menolak berjalan
+kalau sudah ada baris `schools` (aman dijalankan berulang tanpa sengaja
+menimpa), dan dikonfigurasi murni lewat environment variable (tidak ada
+kredensial hardcoded).
+
+**D89. Deploy production pertama memakai Vercel (hosting, tier gratis)
+
+- Neon (PostgreSQL, tier gratis, project TERPISAH dari database dev
+  `sikep` maupun database proyek SIMPEL PESANTREN yang lain) — BUKAN VPS
+  manual seperti yang dibayangkan `docs/deployment.md` versi PHASE 12
+  awal.**
+  Alasan: permintaan eksplisit pengguna untuk opsi gratis tanpa mengurus
+  server Linux sendiri. Konsekuensi yang diterima sadar (bukan celah yang
+  terlewat): modul "Bukti Transaksi" (D75) TIDAK berfungsi andal di
+  Vercel — storage disk lokal (`lib/storage/attachment-storage.ts`)
+  mengasumsikan filesystem persisten, sedangkan fungsi serverless Vercel
+  efemeral, bisa kehilangan file antar-invocation. Pengguna sudah
+  diberitahu eksplisit dan memilih deploy dulu, perbaikan storage
+  menyusul kapan pun dibutuhkan (kandidat: Cloudflare R2, cocok dengan
+  abstraksi S3-ready yang sudah didesain D75, atau Supabase Storage).
+  Insiden operasional selama proses ini: project Neon pertama yang dibuat
+  pengguna ternyata database SIMPEL PESANTREN yang sudah berisi data
+  (migrasi gagal dengan `relation "schools" already exists` sebelum
+  sempat merusak apa pun) — dipulihkan dengan menghapus satu baris
+  `_prisma_migrations` yang gagal, TANPA menyentuh tabel data aplikasi
+  lain, lalu pengguna diarahkan membuat database Neon baru yang benar-
+  benar terpisah lewat integrasi Vercel (akun Neon-nya dibuat lewat
+  integrasi itu, jadi pembuatan project baru harus lewat Vercel, bukan
+  dashboard neon.tech langsung — batasan akun, bukan bug).

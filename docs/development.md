@@ -145,17 +145,18 @@ dan sebelumnya hanya dibuat oleh `next dev`/`next build`, sehingga
 - Cek sesi: `GET /api/v1/auth/me`.
 - Ada UI manajemen user di `/admin/users` (PHASE 4) — tapi user PERTAMA di
   sekolah pertama tetap harus dibuat manual (belum ada yang bisa login
-  untuk membuatnya lewat UI). Setelah `db:seed` mengisi tabel `roles`, dan
-  setelah ada baris `schools`:
-  ```ts
-  // jalankan lewat: npx tsx -e "..." atau script sekali-pakai
-  import { createPasswordHash } from "./services/AuthService";
-  console.log(await createPasswordHash("password-anda"));
+  untuk membuatnya lewat UI). Setelah `db:seed` mengisi tabel `roles`,
+  jalankan `scripts/bootstrap-admin.ts` (D88) untuk membuat sekolah +
+  ADMIN pertama sekaligus, satu perintah, tanpa perlu Prisma Studio:
+  ```bash
+  DATABASE_URL="<url database target>" \
+  BOOTSTRAP_SCHOOL_NAME="Nama Pesantren" \
+  BOOTSTRAP_ADMIN_EMAIL="admin@contoh.test" \
+  BOOTSTRAP_ADMIN_PASSWORD="password-kuat" \
+  npx tsx scripts/bootstrap-admin.ts
   ```
-  lalu `INSERT` baris ke tabel `users` (lewat Prisma Studio/`db:studio`)
-  dengan `password_hash` hasil di atas dan `role_id` yang sesuai (role
-  `ADMIN`) — **jangan pernah** menyimpan password plaintext, bahkan untuk
-  data development.
+  Menolak berjalan (aman, tidak menimpa) kalau tabel `schools` sudah
+  berisi baris — jadi aman dijalankan berulang tanpa sengaja.
 
 ## Master Data (PHASE 4)
 
